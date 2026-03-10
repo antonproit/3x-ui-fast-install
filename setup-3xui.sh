@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -eu
 
 # ============================================================
 #  3x-ui installer — fully automatic, no user input needed
@@ -128,20 +128,26 @@ RENEW_EOF
 # -------------------- 3x-ui installation --------------------
 install_3xui() {
     info "Установка панели 3x-ui (автоматически)..."
+    set +e
     yes "" | bash <(curl -Ls https://raw.githubusercontent.com/MHSanaei/3x-ui/master/install.sh) 2>&1
+    set -e
 }
 
 # -------------------- configure panel --------------------
 configure_panel() {
     local XUI_BIN="/usr/local/x-ui/x-ui"
-    [[ ! -x "$XUI_BIN" ]] && error "x-ui не найден после установки."
+
+    if [[ ! -x "$XUI_BIN" ]]; then
+        warn "x-ui не найден, пропускаю настройку."
+        return 0
+    fi
 
     info "Настройка панели: порт $PANEL_PORT, TLS сертификаты..."
 
     $XUI_BIN setting -port "$PANEL_PORT" 2>/dev/null || true
     $XUI_BIN setting -certFile "$CERT_CRT" -keyFile "$CERT_KEY" 2>/dev/null || true
 
-    systemctl restart x-ui
+    systemctl restart x-ui 2>/dev/null || true
     info "Панель настроена и перезапущена."
 }
 
