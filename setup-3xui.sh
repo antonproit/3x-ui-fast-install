@@ -2,17 +2,16 @@
 set -euo pipefail
 
 # ============================================================
-#  3x-ui installer with auto-renewing self-signed certificates
-#  Cert lifetime: 6 days, auto-renewal via cron every 5 days
+#  3x-ui installer — fully automatic, no user input needed
+#  Cert: 6 days, auto-renewal every 5 days via cron
 #  Tested on: Ubuntu 20.04 / 22.04 / 24.04
 # ============================================================
 
 # ====================== YOUR LINKS ==========================
-# Change these to your own URLs:
-CHANNEL_URL="https://t.me/YOUR_CHANNEL"        # Telegram / YouTube / etc.
-DONATE_URL="https://boosty.to/YOUR_PAGE"        # Boosty / DonationAlerts / etc.
-CHANNEL_NAME="My Channel"
-DONATE_NAME="Support on Boosty"
+CHANNEL_URL="https://t.me/Anton_Pro_IT"
+DONATE_URL="https://pay.cloudtips.ru/p/0e541e9b"
+CHANNEL_NAME="Подписывайся на канал — Антон PRO IT"
+DONATE_NAME="Поддержать автора"
 # =============================================================
 
 CERT_DIR="/root/cert"
@@ -21,6 +20,7 @@ CERT_KEY="$CERT_DIR/private.key"
 CERT_CRT="$CERT_DIR/cert.crt"
 RENEW_SCRIPT="$CERT_DIR/renew-cert.sh"
 CRON_INTERVAL=5         # renew every 5 days (before 6-day expiry)
+PANEL_PORT=2053         # default panel port
 
 # -------------------- helpers --------------------
 info()  { printf '\n\033[1;32m[INFO]\033[0m %s\n' "$*"; }
@@ -38,25 +38,22 @@ install_deps() {
     apt-get install -y curl openssl qrencode
 }
 
+# -------------------- detect server IP --------------------
+detect_ip() {
+    info "Определение IP-адреса сервера..."
+    SERVER_ADDR=$(curl -s4 ifconfig.me 2>/dev/null || curl -s4 api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
+    [[ -z "$SERVER_ADDR" ]] && error "Не удалось определить IP-адрес сервера."
+    info "IP сервера: $SERVER_ADDR"
+}
+
 # -------------------- certificate generation --------------------
 generate_cert() {
-    info "Генерация самоподписного SSL-сертификата (срок: $CERT_DAYS дней)..."
+    info "Генерация SSL-сертификата (срок: $CERT_DAYS дней)..."
 
     mkdir -p "$CERT_DIR"
-
-    read -rp "Введите IP-адрес или домен сервера (например 123.45.67.89 или panel.example.com): " SERVER_ADDR
-    [[ -z "$SERVER_ADDR" ]] && error "Адрес сервера не может быть пустым."
-
-    # Save address for renewal script
     echo "$SERVER_ADDR" > "$CERT_DIR/.server_addr"
 
     _issue_cert
-
-    info "Сертификат создан:"
-    echo "  🔐 Ключ:      $CERT_KEY"
-    echo "  📜 Сертификат: $CERT_CRT"
-    echo ""
-    openssl x509 -in "$CERT_CRT" -noout -subject -dates
 }
 
 _issue_cert() {
@@ -130,8 +127,22 @@ RENEW_EOF
 
 # -------------------- 3x-ui installation --------------------
 install_3xui() {
-    info "Установка панели 3x-ui..."
-    bash <(curl -Ls https://raw.githubusercontent.com/MHSanaei/3x-ui/master/install.sh)
+    info "Установка панели 3x-ui (автоматически)..."
+    yes "" | bash <(curl -Ls https://raw.githubusercontent.com/MHSanaei/3x-ui/master/install.sh) 2>&1
+}
+
+# -------------------- configure panel --------------------
+configure_panel() {
+    local XUI_BIN="/usr/local/x-ui/x-ui"
+    [[ ! -x "$XUI_BIN" ]] && error "x-ui не найден после установки."
+
+    info "Настройка панели: порт $PANEL_PORT, TLS сертификаты..."
+
+    $XUI_BIN setting -port "$PANEL_PORT" 2>/dev/null || true
+    $XUI_BIN setting -certFile "$CERT_CRT" -keyFile "$CERT_KEY" 2>/dev/null || true
+
+    systemctl restart x-ui
+    info "Панель настроена и перезапущена."
 }
 
 # -------------------- read panel settings --------------------
@@ -149,8 +160,8 @@ read_panel_settings() {
         PANEL_PATH=$(echo "$settings" | grep -i 'webBasePath\|base.*path' | head -1 | awk -F': ' '{print $2}' | xargs)
     fi
 
-    [[ -z "$PANEL_USER" ]] && PANEL_USER="(см. вывод установщика выше)"
-    [[ -z "$PANEL_PASS" ]] && PANEL_PASS="(см. вывод установщика выше)"
+    [[ -z "$PANEL_USER" ]] && PANEL_USER="admin"
+    [[ -z "$PANEL_PASS" ]] && PANEL_PASS="admin"
     [[ -z "$PANEL_PORT" ]] && PANEL_PORT="2053"
     [[ -z "$PANEL_PATH" ]] && PANEL_PATH="/"
 }
@@ -225,9 +236,11 @@ print_summary() {
 main() {
     check_root
     install_deps
+    detect_ip
     generate_cert
     setup_auto_renewal
     install_3xui
+    configure_panel
     print_summary
 }
 

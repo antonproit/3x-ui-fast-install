@@ -1,46 +1,56 @@
-# 3x-ui Installer
+# Установщик 3X-UI
 
-One-command installer for [3x-ui](https://github.com/MHSanaei/3x-ui) panel with **auto-renewing self-signed TLS certificates**.
+Установка панели [3x-ui](https://github.com/MHSanaei/3x-ui) одной командой с **автопродлением SSL-сертификатов**.
 
-## Quick Install
+## 🚀 Быстрая установка
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/YOUR_USERNAME/3x-ui-install/main/setup-3xui.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/antonproit/3x-ui-install/main/setup-3xui.sh)
 ```
 
-## What it does
+## 🛠️ Что устанавливается?
 
-1. Updates the system, installs `curl`, `openssl`, `qrencode`
-2. Asks for server IP/domain
-3. Generates ECC (prime256v1) self-signed certificate valid for 6 days
-4. Sets up automatic certificate renewal every 5 days via cron
-5. Installs 3x-ui from the official repository
-6. Displays panel credentials and certificate info
+- **OpenSSL** — генерация сертификатов
+- **QRencode** — QR-коды в терминале
+- **3X-UI** — панель управления VPN
 
-## Certificate auto-renewal
+## 📋 Что делает скрипт?
 
-- Certificate is valid for **6 days**
-- Cron job renews it every **5 days** (before expiry)
-- Panel restarts automatically after renewal
-- No manual intervention required
-- Renewal script: `/root/cert/renew-cert.sh`
+1. Обновляет систему и ставит зависимости
+2. Спрашивает IP-адрес или домен сервера
+3. Генерирует самоподписной SSL-сертификат (ECC prime256v1) на 6 дней
+4. Настраивает автопродление сертификата каждые 5 дней через cron
+5. Устанавливает панель 3X-UI с официального репозитория
+6. Выводит данные для входа в панель
 
-## After installation
+## 🔄 Автопродление сертификата
 
-1. Open `https://YOUR_SERVER_IP:PORT` in a browser
-2. Go to **Panel Settings → TLS**
-3. Set paths:
-   - Public key: `/root/cert/cert.crt`
-   - Private key: `/root/cert/private.key`
-4. Save and restart the panel
+- Срок действия сертификата: **6 дней**
+- Автопродление: **каждые 5 дней** в 03:00 (cron)
+- Панель перезапускается автоматически
+- Вмешательство не требуется
+- Скрипт продления: `/root/cert/renew-cert.sh`
 
-## Panel management
+## ⚙️ После установки
+
+1. Откройте `https://IP_СЕРВЕРА:ПОРТ` в браузере
+2. Перейдите в **Настройки панели → TLS**
+3. Укажите пути:
+   - Сертификат: `/root/cert/cert.crt`
+   - Приватный ключ: `/root/cert/private.key`
+4. Сохраните и перезапустите панель
+
+## 🖥 Управление панелью
 
 ```bash
 x-ui
 ```
 
-## Requirements
+## 📌 Требования
 
 - Ubuntu 20.04 / 22.04 / 24.04
-- Root access
+- Root-доступ
+
+## 📢 Канал
+
+[Антон PRO IT](https://t.me/Anton_Pro_IT)
