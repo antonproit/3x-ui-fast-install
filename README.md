@@ -7,7 +7,7 @@
 Скрипт всё сделает сам — никаких вопросов, просто ждите завершения.
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/antonproit/3x-ui-install/main/setup-3xui.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/antonproit/3x-ui-fast-install/main/setup-3xui.sh)
 ```
 
 ## 🛠️ Что устанавливается?
