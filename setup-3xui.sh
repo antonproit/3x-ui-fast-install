@@ -127,7 +127,7 @@ RENEW_EOF
 
 # -------------------- 3x-ui installation --------------------
 install_3xui() {
-    info "Установка панели 3x-ui (автоматически)..."
+    info "Установка панели 3x-ui..."
     set +e
     yes "" | bash <(curl -Ls https://raw.githubusercontent.com/MHSanaei/3x-ui/master/install.sh) 2>&1
     set -e
@@ -148,94 +148,103 @@ configure_panel() {
     $XUI_BIN setting -certFile "$CERT_CRT" -keyFile "$CERT_KEY" 2>/dev/null || true
 
     systemctl restart x-ui 2>/dev/null || true
-    info "Панель настроена и перезапущена."
 }
 
-# -------------------- read panel settings --------------------
-read_panel_settings() {
-    local XUI_BIN="/usr/local/x-ui/x-ui"
-    PANEL_USER=""; PANEL_PASS=""; PANEL_PORT=""; PANEL_PATH=""
+# -------------------- create info script --------------------
+create_info_script() {
+    info "Сохранение скрипта с данными панели..."
 
-    if [[ -x "$XUI_BIN" ]]; then
-        local settings
-        settings=$($XUI_BIN setting -show 2>/dev/null || true)
+    cat > /root/panel-info.sh << 'INFOEOF'
+#!/bin/bash
+CERT_DIR="/root/cert"
+CERT_KEY="$CERT_DIR/private.key"
+CERT_CRT="$CERT_DIR/cert.crt"
+RENEW_SCRIPT="$CERT_DIR/renew-cert.sh"
+CERT_DAYS=6
+CRON_INTERVAL=5
 
-        PANEL_USER=$(echo "$settings" | grep -i 'username' | head -1 | awk -F': ' '{print $2}' | xargs)
-        PANEL_PASS=$(echo "$settings" | grep -i 'password' | head -1 | awk -F': ' '{print $2}' | xargs)
-        PANEL_PORT=$(echo "$settings" | grep -i 'port'     | head -1 | awk -F': ' '{print $2}' | xargs)
-        PANEL_PATH=$(echo "$settings" | grep -i 'webBasePath\|base.*path' | head -1 | awk -F': ' '{print $2}' | xargs)
+CHANNEL_URL="https://t.me/Anton_Pro_IT"
+DONATE_URL="https://pay.cloudtips.ru/p/0e541e9b"
+CHANNEL_NAME="Подписывайся на канал — Антон PRO IT"
+DONATE_NAME="Поддержать автора"
+
+SERVER_ADDR=$(cat "$CERT_DIR/.server_addr" 2>/dev/null)
+XUI_BIN="/usr/local/x-ui/x-ui"
+
+PANEL_USER=""; PANEL_PASS=""; PANEL_PORT=""; PANEL_PATH=""
+if [[ -x "$XUI_BIN" ]]; then
+    settings=$($XUI_BIN setting -show 2>/dev/null || true)
+    PANEL_USER=$(echo "$settings" | grep -i 'username' | head -1 | awk -F': ' '{print $2}' | xargs)
+    PANEL_PASS=$(echo "$settings" | grep -i 'password' | head -1 | awk -F': ' '{print $2}' | xargs)
+    PANEL_PORT=$(echo "$settings" | grep -i 'port'     | head -1 | awk -F': ' '{print $2}' | xargs)
+    PANEL_PATH=$(echo "$settings" | grep -i 'webBasePath\|base.*path' | head -1 | awk -F': ' '{print $2}' | xargs)
+fi
+[[ -z "$PANEL_USER" ]] && PANEL_USER="admin"
+[[ -z "$PANEL_PASS" ]] && PANEL_PASS="admin"
+[[ -z "$PANEL_PORT" ]] && PANEL_PORT="2053"
+[[ -z "$PANEL_PATH" ]] && PANEL_PATH="/"
+
+PANEL_LINK="https://${SERVER_ADDR}:${PANEL_PORT}${PANEL_PATH}"
+
+echo ""
+echo -e "\033[1;32m╔══════════════════════════════════════════════════\033[0m"
+echo -e "\033[1;32m║    ✅ УСТАНОВКА ЗАВЕРШЕНА! ДАННЫЕ ДЛЯ ВХОДА:\033[0m"
+echo -e "\033[1;32m╚══════════════════════════════════════════════════\033[0m"
+echo ""
+echo -e "\033[1;31m  ⚠️  ВНИМАНИЕ! ЭТИ ДАННЫЕ ВАЖНО СОХРАНИТЬ!\033[0m"
+echo ""
+echo -e "\033[1;36m┌──────────────────────────────────────────────────\033[0m"
+echo -e "\033[1;36m│         🖥  Данные панели 3X-UI\033[0m"
+echo -e "\033[1;36m├──────────────────────────────────────────────────\033[0m"
+echo -e "\033[1;37m│  👤 Имя пользователя: \033[1;33m$PANEL_USER\033[0m"
+echo -e "\033[1;37m│  🔑 Пароль:           \033[1;33m$PANEL_PASS\033[0m"
+echo -e "\033[1;37m│  🔌 Порт:             \033[1;33m$PANEL_PORT\033[0m"
+echo -e "\033[1;37m│  📁 Путь панели:      \033[1;33m$PANEL_PATH\033[0m"
+echo -e "\033[1;37m│  🌐 Ссылка для входа: \033[1;33m$PANEL_LINK\033[0m"
+echo -e "\033[1;36m└──────────────────────────────────────────────────\033[0m"
+echo ""
+echo -e "\033[1;36m┌──────────────────────────────────────────────────\033[0m"
+echo -e "\033[1;36m│         🔒 SSL-сертификат (автопродление)\033[0m"
+echo -e "\033[1;36m├──────────────────────────────────────────────────\033[0m"
+echo -e "\033[1;37m│  📜 Сертификат:    \033[1;33m$CERT_CRT\033[0m"
+echo -e "\033[1;37m│  🔐 Приватный ключ: \033[1;33m$CERT_KEY\033[0m"
+echo -e "\033[1;37m│  ⏳ Срок действия:  \033[1;33m${CERT_DAYS} дней\033[0m"
+echo -e "\033[1;37m│  🔄 Автопродление:  \033[1;33mкаждые ${CRON_INTERVAL} дней (cron)\033[0m"
+echo -e "\033[1;37m│  📄 Скрипт продления: \033[1;33m$RENEW_SCRIPT\033[0m"
+echo -e "\033[1;36m└──────────────────────────────────────────────────\033[0m"
+echo ""
+echo -e "\033[1;32m   ✅ Теперь можно пользоваться панелью!\033[0m"
+echo ""
+echo -e "\033[1;36m══════════════════════════════════════════════════\033[0m"
+echo -e "\033[1;36m       Спасибо, что используете установщик!       \033[0m"
+echo -e "\033[1;36m══════════════════════════════════════════════════\033[0m"
+echo ""
+if command -v qrencode &>/dev/null; then
+    echo -e "\033[1;33m  📢 $CHANNEL_NAME:\033[0m"
+    echo "  $CHANNEL_URL"
+    qrencode -t ANSIUTF8 "$CHANNEL_URL"
+    echo ""
+    echo -e "\033[1;33m  💰 $DONATE_NAME:\033[0m"
+    echo "  $DONATE_URL"
+    qrencode -t ANSIUTF8 "$DONATE_URL"
+    echo ""
+else
+    echo "  📢 $CHANNEL_NAME: $CHANNEL_URL"
+    echo "  💰 $DONATE_NAME:  $DONATE_URL"
+fi
+echo -e "\033[1;36m══════════════════════════════════════════════════\033[0m"
+echo ""
+
+# Remove one-time trigger from .bashrc
+sed -i '/# 3xui-panel-info/d' /root/.bashrc 2>/dev/null || true
+INFOEOF
+
+    chmod +x /root/panel-info.sh
+
+    # Add one-time auto-run: triggers on next shell prompt
+    if ! grep -q '3xui-panel-info' /root/.bashrc 2>/dev/null; then
+        echo 'bash /root/panel-info.sh # 3xui-panel-info' >> /root/.bashrc
     fi
-
-    [[ -z "$PANEL_USER" ]] && PANEL_USER="admin"
-    [[ -z "$PANEL_PASS" ]] && PANEL_PASS="admin"
-    [[ -z "$PANEL_PORT" ]] && PANEL_PORT="2053"
-    [[ -z "$PANEL_PATH" ]] && PANEL_PATH="/"
-}
-
-# -------------------- QR codes --------------------
-show_qr_codes() {
-    echo ""
-    echo -e "\033[1;36m══════════════════════════════════════════════════\033[0m"
-    echo -e "\033[1;36m       Спасибо, что используете установщик!       \033[0m"
-    echo -e "\033[1;36m══════════════════════════════════════════════════\033[0m"
-    echo ""
-
-    if command -v qrencode &>/dev/null; then
-        echo -e "\033[1;33m  📢 $CHANNEL_NAME:\033[0m"
-        echo "  $CHANNEL_URL"
-        qrencode -t ANSIUTF8 "$CHANNEL_URL"
-        echo ""
-
-        echo -e "\033[1;33m  💰 $DONATE_NAME:\033[0m"
-        echo "  $DONATE_URL"
-        qrencode -t ANSIUTF8 "$DONATE_URL"
-        echo ""
-    else
-        echo "  📢 $CHANNEL_NAME: $CHANNEL_URL"
-        echo "  💰 $DONATE_NAME:  $DONATE_URL"
-    fi
-}
-
-# -------------------- summary --------------------
-print_summary() {
-    read_panel_settings
-
-    local PANEL_LINK="https://${SERVER_ADDR}:${PANEL_PORT}${PANEL_PATH}"
-
-    echo ""
-    echo -e "\033[1;32m╔══════════════════════════════════════════════════\033[0m"
-    echo -e "\033[1;32m║    ✅ УСТАНОВКА ЗАВЕРШЕНА! ДАННЫЕ ДЛЯ ВХОДА:\033[0m"
-    echo -e "\033[1;32m╚══════════════════════════════════════════════════\033[0m"
-    echo ""
-    echo -e "\033[1;31m  ⚠️  ВНИМАНИЕ! ЭТИ ДАННЫЕ ВАЖНО СОХРАНИТЬ!\033[0m"
-    echo ""
-    echo -e "\033[1;36m┌──────────────────────────────────────────────────\033[0m"
-    echo -e "\033[1;36m│         🖥  Данные панели 3X-UI\033[0m"
-    echo -e "\033[1;36m├──────────────────────────────────────────────────\033[0m"
-    echo -e "\033[1;37m│  👤 Имя пользователя: \033[1;33m$PANEL_USER\033[0m"
-    echo -e "\033[1;37m│  🔑 Пароль:           \033[1;33m$PANEL_PASS\033[0m"
-    echo -e "\033[1;37m│  🔌 Порт:             \033[1;33m$PANEL_PORT\033[0m"
-    echo -e "\033[1;37m│  📁 Путь панели:      \033[1;33m$PANEL_PATH\033[0m"
-    echo -e "\033[1;37m│  🌐 Ссылка для входа: \033[1;33m$PANEL_LINK\033[0m"
-    echo -e "\033[1;36m└──────────────────────────────────────────────────\033[0m"
-    echo ""
-    echo -e "\033[1;36m┌──────────────────────────────────────────────────\033[0m"
-    echo -e "\033[1;36m│         🔒 SSL-сертификат (автопродление)\033[0m"
-    echo -e "\033[1;36m├──────────────────────────────────────────────────\033[0m"
-    echo -e "\033[1;37m│  📜 Сертификат:    \033[1;33m$CERT_CRT\033[0m"
-    echo -e "\033[1;37m│  🔐 Приватный ключ: \033[1;33m$CERT_KEY\033[0m"
-    echo -e "\033[1;37m│  ⏳ Срок действия:  \033[1;33m${CERT_DAYS} дней\033[0m"
-    echo -e "\033[1;37m│  🔄 Автопродление:  \033[1;33mкаждые ${CRON_INTERVAL} дней (cron)\033[0m"
-    echo -e "\033[1;37m│  📄 Скрипт продления: \033[1;33m$RENEW_SCRIPT\033[0m"
-    echo -e "\033[1;36m└──────────────────────────────────────────────────\033[0m"
-    echo ""
-    echo -e "\033[1;32m   ✅ Теперь можно пользоваться панелью!\033[0m"
-    echo ""
-
-    show_qr_codes
-
-    echo -e "\033[1;36m══════════════════════════════════════════════════\033[0m"
-    echo ""
 }
 
 # -------------------- main --------------------
@@ -245,9 +254,12 @@ main() {
     detect_ip
     generate_cert
     setup_auto_renewal
+    create_info_script
     install_3xui
     configure_panel
-    print_summary
+
+    info "Нажмите Enter для просмотра данных панели и QR-кодов..."
+}
 }
 
 main
