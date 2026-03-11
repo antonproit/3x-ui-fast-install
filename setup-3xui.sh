@@ -20,7 +20,6 @@ CERT_KEY="$CERT_DIR/private.key"
 CERT_CRT="$CERT_DIR/cert.crt"
 RENEW_SCRIPT="$CERT_DIR/renew-cert.sh"
 CRON_INTERVAL=5         # renew every 5 days (before 6-day expiry)
-PANEL_PORT=2053         # default panel port
 
 # -------------------- helpers --------------------
 info()  { printf '\n\033[1;32m[INFO]\033[0m %s\n' "$*"; }
@@ -133,6 +132,22 @@ install_3xui() {
     set -e
 }
 
+# -------------------- generate random credentials --------------------
+gen_random() {
+    local len=$1
+    tr -dc 'A-Za-z0-9' </dev/urandom | head -c "$len"
+}
+
+gen_random_port() {
+    shuf -i 10000-59999 -n 1
+}
+
+gen_random_path() {
+    local path
+    path=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20)
+    echo "/$path/"
+}
+
 # -------------------- configure panel --------------------
 configure_panel() {
     local XUI_BIN="/usr/local/x-ui/x-ui"
@@ -142,12 +157,29 @@ configure_panel() {
         return 0
     fi
 
-    info "Настройка панели: порт $PANEL_PORT, TLS сертификаты..."
+    info "Генерация уникальных данных для входа..."
 
-    $XUI_BIN setting -port "$PANEL_PORT" 2>/dev/null || true
+    GEN_USER=$(gen_random 10)
+    GEN_PASS=$(gen_random 10)
+    GEN_PORT=$(gen_random_port)
+    GEN_PATH=$(gen_random_path)
+
+    $XUI_BIN setting -username "$GEN_USER" -password "$GEN_PASS" 2>/dev/null || true
+    $XUI_BIN setting -port "$GEN_PORT" 2>/dev/null || true
+    $XUI_BIN setting -webBasePath "$GEN_PATH" 2>/dev/null || true
     $XUI_BIN setting -certFile "$CERT_CRT" -keyFile "$CERT_KEY" 2>/dev/null || true
 
+    # Save credentials for panel-info.sh
+    cat > "$CERT_DIR/.panel_creds" << CREDEOF
+PANEL_USER=$GEN_USER
+PANEL_PASS=$GEN_PASS
+PANEL_PORT=$GEN_PORT
+PANEL_PATH=$GEN_PATH
+CREDEOF
+    chmod 600 "$CERT_DIR/.panel_creds"
+
     systemctl restart x-ui 2>/dev/null || true
+    info "Панель настроена с уникальными данными."
 }
 
 # -------------------- create info script --------------------
@@ -169,20 +201,25 @@ CHANNEL_NAME="Подписывайся на канал — Антон PRO IT"
 DONATE_NAME="Поддержать автора"
 
 SERVER_ADDR=$(cat "$CERT_DIR/.server_addr" 2>/dev/null)
-XUI_BIN="/usr/local/x-ui/x-ui"
 
-PANEL_USER=""; PANEL_PASS=""; PANEL_PORT=""; PANEL_PATH=""
-if [[ -x "$XUI_BIN" ]]; then
-    settings=$($XUI_BIN setting -show 2>/dev/null || true)
-    PANEL_USER=$(echo "$settings" | grep -i 'username' | head -1 | awk -F': ' '{print $2}' | xargs)
-    PANEL_PASS=$(echo "$settings" | grep -i 'password' | head -1 | awk -F': ' '{print $2}' | xargs)
-    PANEL_PORT=$(echo "$settings" | grep -i 'port'     | head -1 | awk -F': ' '{print $2}' | xargs)
-    PANEL_PATH=$(echo "$settings" | grep -i 'webBasePath\|base.*path' | head -1 | awk -F': ' '{print $2}' | xargs)
+# Read saved credentials
+if [[ -f "$CERT_DIR/.panel_creds" ]]; then
+    source "$CERT_DIR/.panel_creds"
+else
+    XUI_BIN="/usr/local/x-ui/x-ui"
+    PANEL_USER=""; PANEL_PASS=""; PANEL_PORT=""; PANEL_PATH=""
+    if [[ -x "$XUI_BIN" ]]; then
+        settings=$($XUI_BIN setting -show 2>/dev/null || true)
+        PANEL_USER=$(echo "$settings" | grep -i 'username' | head -1 | awk -F': ' '{print $2}' | xargs)
+        PANEL_PASS=$(echo "$settings" | grep -i 'password' | head -1 | awk -F': ' '{print $2}' | xargs)
+        PANEL_PORT=$(echo "$settings" | grep -i 'port'     | head -1 | awk -F': ' '{print $2}' | xargs)
+        PANEL_PATH=$(echo "$settings" | grep -i 'webBasePath\|base.*path' | head -1 | awk -F': ' '{print $2}' | xargs)
+    fi
+    [[ -z "$PANEL_USER" ]] && PANEL_USER="admin"
+    [[ -z "$PANEL_PASS" ]] && PANEL_PASS="admin"
+    [[ -z "$PANEL_PORT" ]] && PANEL_PORT="2053"
+    [[ -z "$PANEL_PATH" ]] && PANEL_PATH="/"
 fi
-[[ -z "$PANEL_USER" ]] && PANEL_USER="admin"
-[[ -z "$PANEL_PASS" ]] && PANEL_PASS="admin"
-[[ -z "$PANEL_PORT" ]] && PANEL_PORT="2053"
-[[ -z "$PANEL_PATH" ]] && PANEL_PATH="/"
 
 PANEL_LINK="https://${SERVER_ADDR}:${PANEL_PORT}${PANEL_PATH}"
 
