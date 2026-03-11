@@ -258,6 +258,8 @@ main() {
     install_3xui
     configure_panel
 
-    info "Нажмите Enter для просмотра данных панели и QR-кодов..."
+    echo ""
+    read -rp $'\033[1;32m[INFO]\033[0m Установка завершена! Нажмите Enter для просмотра данных панели и QR-кодов...'
+    bash /root/panel-info.sh
 }
 main
